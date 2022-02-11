@@ -20,11 +20,11 @@ import MoreIcon from "@mdi/svg/svg/unfold-more-horizontal.svg";
 import { Stack } from "@mui/material";
 // eslint-disable-next-line no-restricted-imports
 import { first, isEqual, get, last } from "lodash";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import ReactHoverObserver from "react-hover-observer";
 import Tree from "react-json-tree";
 
-import { useDataSourceInfo, useMessagesByTopic } from "@foxglove/studio-base/PanelAPI";
+import { useDataSourceInfo } from "@foxglove/studio-base/PanelAPI";
 import Dropdown from "@foxglove/studio-base/components/Dropdown";
 import DropdownItem from "@foxglove/studio-base/components/Dropdown/DropdownItem";
 import EmptyState from "@foxglove/studio-base/components/EmptyState";
@@ -40,10 +40,7 @@ import {
   traverseStructure,
 } from "@foxglove/studio-base/components/MessagePathSyntax/messagePathsForDatatype";
 import parseRosPath from "@foxglove/studio-base/components/MessagePathSyntax/parseRosPath";
-import {
-  useCachedGetMessagePathDataItems,
-  MessagePathDataItem,
-} from "@foxglove/studio-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { MessagePathDataItem } from "@foxglove/studio-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { useLatestMessageDataItem } from "@foxglove/studio-base/components/MessagePathSyntax/useLatestMessageDataItem";
 import Panel from "@foxglove/studio-base/components/Panel";
 import { usePanelContext } from "@foxglove/studio-base/components/PanelContext";
@@ -160,23 +157,29 @@ function RawMessages(props: Props) {
   const [expandAll, setExpandAll] = useState<boolean | undefined>(props.defaultExpandAll ?? false);
   const [expandedFields, setExpandedFields] = useState(() => new Set());
 
-  const topicName = topicRosPath?.topicName ?? "";
-  const consecutiveMsgs = useMessagesByTopic({
-    topics: [topicName],
-    historySize: 2,
-  })[topicName];
-  const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems([topicPath]);
-  const prevTickMsg = consecutiveMsgs?.[consecutiveMsgs.length - 2];
-  const prevTickObj = prevTickMsg && {
-    messageEvent: prevTickMsg,
-    queriedData: cachedGetMessagePathDataItems(topicPath, prevTickMsg) ?? [],
-  };
   const currTickObj = useLatestMessageDataItem(topicPath);
-
   const diffTopicObj = useLatestMessageDataItem(diffEnabled ? diffTopicPath : "");
 
+  // currentTickObjRef stores the current value of currTickObj
+  // When currTickObj no longer matches this ref, we update prevTickObjRef
+  const currTickObjRef = useRef<typeof currTickObj>(undefined);
+
+  // prevTickObjRef stores the _previous_ value of currTickObj
+  const prevTickObjRef = useRef<typeof currTickObj>(undefined);
+
+  // When we reset and have no message, clear the previous ref
+  if (currTickObj == undefined) {
+    currTickObjRef.current = undefined;
+  }
+
+  // when current Tick object changes, we update the prevTickObject
+  if (currTickObjRef.current !== currTickObj) {
+    prevTickObjRef.current = currTickObjRef.current;
+    currTickObjRef.current = currTickObj;
+  }
+
   const inTimetickDiffMode = diffEnabled && diffMethod === PREV_MSG_METHOD;
-  const baseItem = inTimetickDiffMode ? prevTickObj : currTickObj;
+  const baseItem = inTimetickDiffMode ? prevTickObjRef.current : currTickObj;
   const diffItem = inTimetickDiffMode ? currTickObj : diffTopicObj;
 
   const onTopicPathChange = useCallback(

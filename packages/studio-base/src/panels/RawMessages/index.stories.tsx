@@ -12,7 +12,9 @@
 //   You may not use this file except in compliance with the License.
 
 import { storiesOf } from "@storybook/react";
+import { useEffect, useState } from "react";
 
+import { MessageEvent } from "@foxglove/studio";
 import RawMessages, { PREV_MSG_METHOD } from "@foxglove/studio-base/panels/RawMessages";
 import PanelSetup from "@foxglove/studio-base/stories/PanelSetup";
 
@@ -24,6 +26,7 @@ import {
   topicsToDiffFixture,
   topicsWithIdsToDiffFixture,
   multipleNumberMessagesFixture,
+  multipleMessagesFilter,
 } from "./fixture";
 
 const noDiffConfig = {
@@ -235,6 +238,81 @@ storiesOf("panels/RawMessages", module)
       </PanelSetup>
     );
   })
+  .add("diff consecutive messages with filter", () => {
+    const [state, setState] = useState<{ count: number; messages: MessageEvent<unknown>[] }>({
+      count: 0,
+      messages: [],
+    });
+
+    // Make it look like new messages are arriving to the panel
+    useEffect(() => {
+      switch (state.count) {
+        case 0:
+          setTimeout(() => {
+            setState({
+              count: state.count + 1,
+              messages: [
+                {
+                  topic: "/foo",
+                  receiveTime: { sec: 123, nsec: 1 },
+                  message: { type: 2, status: "WAITING" },
+                  sizeInBytes: 0,
+                },
+              ],
+            });
+          }, 100);
+          break;
+        case 1:
+          setTimeout(() => {
+            setState({
+              count: state.count + 1,
+              messages: [
+                {
+                  topic: "/foo",
+                  receiveTime: { sec: 123, nsec: 2 },
+                  message: { type: 1, status: "FAIL" },
+                  sizeInBytes: 0,
+                },
+              ],
+            });
+          }, 100);
+          break;
+        case 2:
+          setTimeout(() => {
+            setState({
+              count: state.count + 1,
+              messages: [
+                {
+                  topic: "/foo",
+                  receiveTime: { sec: 123, nsec: 3 },
+                  message: { type: 2, status: "SUCCESS" },
+                  sizeInBytes: 0,
+                },
+              ],
+            });
+          }, 100);
+          break;
+      }
+    }, [state]);
+
+    return (
+      <PanelSetup
+        fixture={{ ...multipleMessagesFilter, frame: { "/foo": state.messages } }}
+        style={{ width: 380 }}
+      >
+        <RawMessages
+          overrideConfig={{
+            topicPath: "/foo{type==2}",
+            diffMethod: PREV_MSG_METHOD,
+            diffTopicPath: "",
+            diffEnabled: true,
+            showFullMessageForDiff: true,
+          }}
+          defaultExpandAll
+        />
+      </PanelSetup>
+    );
+  })
   .add("diff consecutive messages with bigint", () => {
     return (
       <PanelSetup fixture={fixture} style={{ width: 380 }}>
@@ -253,7 +331,7 @@ storiesOf("panels/RawMessages", module)
   })
   .add("display correct message when diff is disabled, even with diff method & topic set", () => {
     return (
-      <PanelSetup fixture={fixture} style={{ width: 380 }}>
+      <PanelSetup fixture={multipleNumberMessagesFixture} style={{ width: 380 }}>
         <RawMessages
           overrideConfig={{
             topicPath: "/foo",

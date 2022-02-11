@@ -437,3 +437,21 @@ export const multipleNumberMessagesFixture = {
     ],
   },
 };
+
+// ts-prune-ignore-next
+export const multipleMessagesFilter = {
+  datatypes: new Map(
+    Object.entries({
+      custom_message: {
+        definitions: [
+          { type: "uint32", name: "type", isArray: false },
+          { type: "uint32", name: "status", isArray: false },
+        ],
+      },
+    }),
+  ),
+  topics: [{ name: "/foo", datatype: "custom_message" }],
+  frame: {
+    "/foo": [],
+  },
+};
