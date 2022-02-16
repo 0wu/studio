@@ -27,8 +27,11 @@ type Options = {
 };
 
 type ReducedValue = {
-  matchedMessages: MessageAndData[];
-  originalMessages: readonly Readonly<MessageEvent<unknown>>[];
+  // Matched message (events) oldest message first
+  matches: MessageAndData[];
+
+  // The latest set of message events recevied to addMessages
+  messageEvents: readonly Readonly<MessageEvent<unknown>>[];
 };
 
 /**
@@ -38,11 +41,7 @@ type ReducedValue = {
  *
  * The `historySize` option configures how many matching messages to keep. The default is 1.
  */
-// fixme - rename
-export function useLatestMessageDataItem(
-  path: string,
-  options?: Options,
-): ReducedValue["matchedMessages"] {
+export function useMessageDataItem(path: string, options?: Options): ReducedValue["matches"] {
   const { historySize = 1 } = options ?? {};
   const rosPath = useMemo(() => parseRosPath(path), [path]);
   const topics = useMemo(() => (rosPath ? [rosPath.topicName] : []), [rosPath]);
@@ -72,15 +71,15 @@ export function useLatestMessageDataItem(
       const reversed = newMatches.reverse();
       if (newMatches.length === historySize) {
         return {
-          matchedMessages: reversed,
-          originalMessages: messageEvents,
+          matches: reversed,
+          messageEvents,
         };
       }
 
-      const prevMatches = prevValue.matchedMessages;
+      const prevMatches = prevValue.matches;
       return {
-        matchedMessages: prevMatches.concat(reversed).slice(-historySize),
-        originalMessages: messageEvents,
+        matches: prevMatches.concat(reversed).slice(-historySize),
+        messageEvents,
       };
     },
     [cachedGetMessagePathDataItems, historySize, path],
@@ -90,14 +89,14 @@ export function useLatestMessageDataItem(
     (prevValue?: ReducedValue): ReducedValue => {
       if (!prevValue) {
         return {
-          matchedMessages: [],
-          originalMessages: [],
+          matches: [],
+          messageEvents: [],
         };
       }
 
       // re-filter the previous batch of messages
       const newMatches: MessageAndData[] = [];
-      for (const messageEvent of prevValue.originalMessages) {
+      for (const messageEvent of prevValue.messageEvents) {
         const queriedData = cachedGetMessagePathDataItems(path, messageEvent);
         if (queriedData && queriedData.length > 0) {
           newMatches.push({ messageEvent, queriedData });
@@ -106,8 +105,8 @@ export function useLatestMessageDataItem(
 
       if (newMatches.length > 0) {
         return {
-          matchedMessages: newMatches.slice(-historySize),
-          originalMessages: prevValue.originalMessages,
+          matches: newMatches.slice(-historySize),
+          messageEvents: prevValue.messageEvents,
         };
       }
 
@@ -122,5 +121,5 @@ export function useLatestMessageDataItem(
     restore,
   });
 
-  return reducedValue.matchedMessages;
+  return reducedValue.matches;
 }

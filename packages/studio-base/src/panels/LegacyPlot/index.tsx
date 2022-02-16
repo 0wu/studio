@@ -25,7 +25,7 @@ import ChartComponent from "@foxglove/studio-base/components/Chart";
 import EmptyState from "@foxglove/studio-base/components/EmptyState";
 import KeyListener from "@foxglove/studio-base/components/KeyListener";
 import MessagePathInput from "@foxglove/studio-base/components/MessagePathSyntax/MessagePathInput";
-import { useLatestMessageDataItem } from "@foxglove/studio-base/components/MessagePathSyntax/useLatestMessageDataItem";
+import { useMessageDataItem } from "@foxglove/studio-base/components/MessagePathSyntax/useMessageDataItem";
 import Panel from "@foxglove/studio-base/components/Panel";
 import PanelToolbar from "@foxglove/studio-base/components/PanelToolbar";
 import { useTooltip } from "@foxglove/studio-base/components/Tooltip";
@@ -135,7 +135,7 @@ function TwoDimensionalPlot(props: Props) {
   const [hasVerticalExclusiveZoom, setHasVerticalExclusiveZoom] = React.useState<boolean>(false);
   const [hasBothAxesZoom, setHasBothAxesZoom] = React.useState<boolean>(false);
 
-  const matchedMessages = useLatestMessageDataItem(path.value);
+  const matchedMessages = useMessageDataItem(path.value);
   const message = matchedMessages[0]?.queriedData[0]?.value as PlotMessage | undefined;
 
   const {

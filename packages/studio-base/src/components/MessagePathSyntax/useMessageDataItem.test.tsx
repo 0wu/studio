@@ -17,7 +17,7 @@ import { MessageEvent, Topic } from "@foxglove/studio-base/players/types";
 import MockCurrentLayoutProvider from "@foxglove/studio-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
 import { RosDatatypes } from "@foxglove/studio-base/types/RosDatatypes";
 
-import { useLatestMessageDataItem } from "./useLatestMessageDataItem";
+import { useMessageDataItem } from "./useMessageDataItem";
 
 const topics = [{ name: "/topic", datatype: "datatype" }];
 const datatypes: RosDatatypes = new Map(
@@ -48,9 +48,9 @@ const fixtureMessages: MessageEvent<unknown>[] = [
   },
 ];
 
-describe("useLatestMessageDataItem", () => {
+describe("useMessageDataItem", () => {
   it("returns empty array by default", async () => {
-    const { result } = renderHook(({ path }) => useLatestMessageDataItem(path), {
+    const { result } = renderHook(({ path }) => useMessageDataItem(path), {
       initialProps: { path: "/topic.value" },
       wrapper({ children }) {
         return (
@@ -66,7 +66,7 @@ describe("useLatestMessageDataItem", () => {
   });
 
   it("uses the latest message", async () => {
-    const { result, rerender } = renderHook(({ path }) => useLatestMessageDataItem(path), {
+    const { result, rerender } = renderHook(({ path }) => useMessageDataItem(path), {
       initialProps: { path: "/topic.value", messages: [fixtureMessages[0]!] },
       wrapper({ children, messages }) {
         return (
@@ -92,7 +92,7 @@ describe("useLatestMessageDataItem", () => {
   });
 
   it("only keeps messages that match the path", async () => {
-    const { result } = renderHook(({ path }) => useLatestMessageDataItem(path), {
+    const { result } = renderHook(({ path }) => useMessageDataItem(path), {
       initialProps: { path: "/topic{value==1}.value" },
       wrapper({ children }) {
         return (
@@ -120,7 +120,7 @@ describe("useLatestMessageDataItem", () => {
   });
 
   it("changing the path gives the new queriedData from the message", async () => {
-    const { result, rerender } = renderHook(({ path }) => useLatestMessageDataItem(path), {
+    const { result, rerender } = renderHook(({ path }) => useMessageDataItem(path), {
       initialProps: { path: "/topic{value==1}.value" },
       wrapper({ children }) {
         return (
@@ -156,7 +156,7 @@ describe("useLatestMessageDataItem", () => {
   });
 
   it("restores previously received message when topics and datatypes becomes available", async () => {
-    const { result, rerender } = renderHook(({ path }) => useLatestMessageDataItem(path), {
+    const { result, rerender } = renderHook(({ path }) => useMessageDataItem(path), {
       initialProps: {
         path: "/topic{value==2}.value",
         datatypes: new Map(),
@@ -192,25 +192,22 @@ describe("useLatestMessageDataItem", () => {
   });
 
   it("keeps a history", async () => {
-    const { result } = renderHook(
-      ({ path }) => useLatestMessageDataItem(path, { historySize: 2 }),
-      {
-        initialProps: { path: "/topic.value" },
-        wrapper({ children }) {
-          return (
-            <MockCurrentLayoutProvider>
-              <MockMessagePipelineProvider
-                messages={fixtureMessages}
-                topics={topics}
-                datatypes={datatypes}
-              >
-                {children}
-              </MockMessagePipelineProvider>
-            </MockCurrentLayoutProvider>
-          );
-        },
+    const { result } = renderHook(({ path }) => useMessageDataItem(path, { historySize: 2 }), {
+      initialProps: { path: "/topic.value" },
+      wrapper({ children }) {
+        return (
+          <MockCurrentLayoutProvider>
+            <MockMessagePipelineProvider
+              messages={fixtureMessages}
+              topics={topics}
+              datatypes={datatypes}
+            >
+              {children}
+            </MockMessagePipelineProvider>
+          </MockCurrentLayoutProvider>
+        );
       },
-    );
+    });
     expect(result.all).toEqual([
       [],
       [

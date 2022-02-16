@@ -41,7 +41,7 @@ import {
 } from "@foxglove/studio-base/components/MessagePathSyntax/messagePathsForDatatype";
 import parseRosPath from "@foxglove/studio-base/components/MessagePathSyntax/parseRosPath";
 import { MessagePathDataItem } from "@foxglove/studio-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import { useLatestMessageDataItem } from "@foxglove/studio-base/components/MessagePathSyntax/useLatestMessageDataItem";
+import { useMessageDataItem } from "@foxglove/studio-base/components/MessagePathSyntax/useMessageDataItem";
 import Panel from "@foxglove/studio-base/components/Panel";
 import { usePanelContext } from "@foxglove/studio-base/components/PanelContext";
 import PanelToolbar from "@foxglove/studio-base/components/PanelToolbar";
@@ -157,8 +157,8 @@ function RawMessages(props: Props) {
   const [expandAll, setExpandAll] = useState<boolean | undefined>(props.defaultExpandAll ?? false);
   const [expandedFields, setExpandedFields] = useState(() => new Set());
 
-  const matchedMessages = useLatestMessageDataItem(topicPath, { historySize: 2 });
-  const diffMessages = useLatestMessageDataItem(diffEnabled ? diffTopicPath : "");
+  const matchedMessages = useMessageDataItem(topicPath, { historySize: 2 });
+  const diffMessages = useMessageDataItem(diffEnabled ? diffTopicPath : "");
 
   const diffTopicObj = diffMessages[0];
   const currTickObj = matchedMessages[matchedMessages.length - 1];
