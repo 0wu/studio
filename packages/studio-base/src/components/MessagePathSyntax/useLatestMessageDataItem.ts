@@ -13,7 +13,7 @@
 
 import { useCallback, useMemo } from "react";
 
-import * as PanelAPI from "@foxglove/studio-base/PanelAPI";
+import { useMessageReducer } from "@foxglove/studio-base/PanelAPI";
 import { MessageEvent } from "@foxglove/studio-base/players/types";
 
 import parseRosPath from "./parseRosPath";
@@ -26,7 +26,10 @@ type Options = {
   historySize: number;
 };
 
-type ReducedValue = MessageAndData[];
+type ReducedValue = {
+  matchedMessages: MessageAndData[];
+  originalMessages: readonly Readonly<MessageEvent<unknown>>[];
+};
 
 /**
  * Return an array of MessageAndData[] for matching messages on @param path.
@@ -36,7 +39,10 @@ type ReducedValue = MessageAndData[];
  * The `historySize` option configures how many matching messages to keep. The default is 1.
  */
 // fixme - rename
-export function useLatestMessageDataItem(path: string, options?: Options): ReducedValue {
+export function useLatestMessageDataItem(
+  path: string,
+  options?: Options,
+): ReducedValue["matchedMessages"] {
   const { historySize = 1 } = options ?? {};
   const rosPath = useMemo(() => parseRosPath(path), [path]);
   const topics = useMemo(() => (rosPath ? [rosPath.topicName] : []), [rosPath]);
@@ -44,35 +50,38 @@ export function useLatestMessageDataItem(path: string, options?: Options): Reduc
   const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems([path]);
 
   const addMessages = useCallback(
-    (prevValue: ReducedValue, messages: Readonly<MessageEvent<unknown>[]>): ReducedValue => {
-      // New matches are collected here and
-      const newMatches: ReducedValue = [];
-
-      // Iterate in reverse so we can early-return and not process all messages.
-      // We stop once we've got historySize messages matched
-      for (let i = messages.length - 1; i >= 0 && newMatches.length < historySize; --i) {
-        const message = messages[i]!;
-        const queriedData = cachedGetMessagePathDataItems(path, message);
-        if (queriedData == undefined || queriedData.length === 0) {
-          continue;
-        }
-
-        newMatches.push({ messageEvent: message, queriedData });
-      }
-
-      if (newMatches.length === 0) {
+    (prevValue: ReducedValue, messageEvents: Readonly<MessageEvent<unknown>[]>): ReducedValue => {
+      if (messageEvents.length === 0) {
         return prevValue;
       }
 
-      // Older messages need to be at the front
-      const reversed = newMatches.reverse();
+      const newMatches: MessageAndData[] = [];
 
-      // When the length is exactly the history size
-      if (newMatches.length === historySize) {
-        return reversed;
+      // Iterate backwards since our default history size is 1 and we might not need to visit all messages
+      // This does mean we need to flip newMatches around since we want to store older items first
+      for (let i = messageEvents.length - 1; i >= 0 && newMatches.length < historySize; --i) {
+        const messageEvent = messageEvents[i]!;
+        const queriedData = cachedGetMessagePathDataItems(path, messageEvent);
+        if (queriedData && queriedData.length > 0) {
+          newMatches.push({ messageEvent, queriedData });
+        }
       }
 
-      return prevValue.concat(reversed).slice(-historySize);
+      // We want older items to be first in the array. Since we iterated backwards
+      // we reverse the matches.
+      const reversed = newMatches.reverse();
+      if (newMatches.length === historySize) {
+        return {
+          matchedMessages: reversed,
+          originalMessages: messageEvents,
+        };
+      }
+
+      const prevMatches = prevValue.matchedMessages;
+      return {
+        matchedMessages: prevMatches.concat(reversed).slice(-historySize),
+        originalMessages: messageEvents,
+      };
     },
     [cachedGetMessagePathDataItems, historySize, path],
   );
@@ -80,29 +89,38 @@ export function useLatestMessageDataItem(path: string, options?: Options): Reduc
   const restore = useCallback(
     (prevValue?: ReducedValue): ReducedValue => {
       if (!prevValue) {
-        return [];
+        return {
+          matchedMessages: [],
+          originalMessages: [],
+        };
       }
 
-      // re-test all the previous messages to make sure they still match
-      return prevValue.filter((messageAndData) => {
-        const queriedData = cachedGetMessagePathDataItems(path, messageAndData.messageEvent);
-        return queriedData && queriedData.length > 0;
-      });
+      // re-filter the previous batch of messages
+      const newMatches: MessageAndData[] = [];
+      for (const messageEvent of prevValue.originalMessages) {
+        const queriedData = cachedGetMessagePathDataItems(path, messageEvent);
+        if (queriedData && queriedData.length > 0) {
+          newMatches.push({ messageEvent, queriedData });
+        }
+      }
+
+      if (newMatches.length > 0) {
+        return {
+          matchedMessages: newMatches.slice(-historySize),
+          originalMessages: prevValue.originalMessages,
+        };
+      }
+
+      return prevValue;
     },
-    [cachedGetMessagePathDataItems, path],
+    [cachedGetMessagePathDataItems, historySize, path],
   );
 
-  const matchedMessages = PanelAPI.useMessageReducer<ReducedValue>({
+  const reducedValue = useMessageReducer<ReducedValue>({
     topics,
     addMessages,
     restore,
   });
 
-  return useMemo(() => {
-    if (!rosPath) {
-      return [];
-    }
-
-    return matchedMessages;
-  }, [matchedMessages, rosPath]);
+  return reducedValue.matchedMessages;
 }
