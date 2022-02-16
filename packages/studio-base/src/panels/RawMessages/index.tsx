@@ -20,7 +20,7 @@ import MoreIcon from "@mdi/svg/svg/unfold-more-horizontal.svg";
 import { Stack } from "@mui/material";
 // eslint-disable-next-line no-restricted-imports
 import { first, isEqual, get, last } from "lodash";
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo } from "react";
 import ReactHoverObserver from "react-hover-observer";
 import Tree from "react-json-tree";
 
@@ -157,29 +157,15 @@ function RawMessages(props: Props) {
   const [expandAll, setExpandAll] = useState<boolean | undefined>(props.defaultExpandAll ?? false);
   const [expandedFields, setExpandedFields] = useState(() => new Set());
 
-  const currTickObj = useLatestMessageDataItem(topicPath);
-  const diffTopicObj = useLatestMessageDataItem(diffEnabled ? diffTopicPath : "");
+  const matchedMessages = useLatestMessageDataItem(topicPath, { historySize: 2 });
+  const diffMessages = useLatestMessageDataItem(diffEnabled ? diffTopicPath : "");
 
-  // currentTickObjRef stores the current value of currTickObj
-  // When currTickObj no longer matches this ref, we update prevTickObjRef
-  const currTickObjRef = useRef<typeof currTickObj>(undefined);
-
-  // prevTickObjRef stores the _previous_ value of currTickObj
-  const prevTickObjRef = useRef<typeof currTickObj>(undefined);
-
-  // When we reset and have no message, clear the previous ref
-  if (currTickObj == undefined) {
-    currTickObjRef.current = undefined;
-  }
-
-  // when current Tick object changes, we update the prevTickObject
-  if (currTickObjRef.current !== currTickObj) {
-    prevTickObjRef.current = currTickObjRef.current;
-    currTickObjRef.current = currTickObj;
-  }
+  const diffTopicObj = diffMessages[0];
+  const currTickObj = matchedMessages[matchedMessages.length - 1];
+  const prevTickObj = matchedMessages[matchedMessages.length - 2];
 
   const inTimetickDiffMode = diffEnabled && diffMethod === PREV_MSG_METHOD;
-  const baseItem = inTimetickDiffMode ? prevTickObjRef.current : currTickObj;
+  const baseItem = inTimetickDiffMode ? prevTickObj : currTickObj;
   const diffItem = inTimetickDiffMode ? currTickObj : diffTopicObj;
 
   const onTopicPathChange = useCallback(

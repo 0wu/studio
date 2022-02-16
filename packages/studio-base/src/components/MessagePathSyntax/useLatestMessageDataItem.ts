@@ -22,60 +22,87 @@ import {
   MessageAndData,
 } from "./useCachedGetMessagePathDataItems";
 
-// Return MessageAndData with the latest matching message for @param path.
-// Return undefined if no message matches the path
-export function useLatestMessageDataItem(path: string): MessageAndData | undefined {
+type Options = {
+  historySize: number;
+};
+
+type ReducedValue = MessageAndData[];
+
+/**
+ * Return an array of MessageAndData[] for matching messages on @param path.
+ *
+ * The first array item is the oldest matched message, and the last item is the newest.
+ *
+ * The `historySize` option configures how many matching messages to keep. The default is 1.
+ */
+// fixme - rename
+export function useLatestMessageDataItem(path: string, options?: Options): ReducedValue {
+  const { historySize = 1 } = options ?? {};
   const rosPath = useMemo(() => parseRosPath(path), [path]);
   const topics = useMemo(() => (rosPath ? [rosPath.topicName] : []), [rosPath]);
 
   const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems([path]);
 
   const addMessages = useCallback(
-    (
-      prevMessageAndData: MessageAndData | undefined,
-      messages: Readonly<MessageEvent<unknown>[]>,
-    ): MessageAndData | undefined => {
+    (prevValue: ReducedValue, messages: Readonly<MessageEvent<unknown>[]>): ReducedValue => {
+      // New matches are collected here and
+      const newMatches: ReducedValue = [];
+
       // Iterate in reverse so we can early-return and not process all messages.
-      for (let i = messages.length - 1; i >= 0; --i) {
+      // We stop once we've got historySize messages matched
+      for (let i = messages.length - 1; i >= 0 && newMatches.length < historySize; --i) {
         const message = messages[i]!;
         const queriedData = cachedGetMessagePathDataItems(path, message);
-        if (queriedData == undefined) {
-          return { messageEvent: message, queriedData: [] };
+        if (queriedData == undefined || queriedData.length === 0) {
+          continue;
         }
-        if (queriedData.length > 0) {
-          return { messageEvent: message, queriedData };
-        }
+
+        newMatches.push({ messageEvent: message, queriedData });
       }
-      return prevMessageAndData;
+
+      if (newMatches.length === 0) {
+        return prevValue;
+      }
+
+      // Older messages need to be at the front
+      const reversed = newMatches.reverse();
+
+      // When the length is exactly the history size
+      if (newMatches.length === historySize) {
+        return reversed;
+      }
+
+      return prevValue.concat(reversed).slice(-historySize);
     },
-    [cachedGetMessagePathDataItems, path],
+    [cachedGetMessagePathDataItems, historySize, path],
   );
 
   const restore = useCallback(
-    (prevMessageAndData?: MessageAndData): MessageAndData | undefined => {
-      if (prevMessageAndData) {
-        const queriedData = cachedGetMessagePathDataItems(path, prevMessageAndData.messageEvent);
-        if (queriedData && queriedData.length > 0) {
-          return { messageEvent: prevMessageAndData.messageEvent, queriedData };
-        }
+    (prevValue?: ReducedValue): ReducedValue => {
+      if (!prevValue) {
+        return [];
       }
-      return undefined;
+
+      // re-test all the previous messages to make sure they still match
+      return prevValue.filter((messageAndData) => {
+        const queriedData = cachedGetMessagePathDataItems(path, messageAndData.messageEvent);
+        return queriedData && queriedData.length > 0;
+      });
     },
     [cachedGetMessagePathDataItems, path],
   );
 
-  const messageAndData = PanelAPI.useMessageReducer<MessageAndData | undefined>({
+  const matchedMessages = PanelAPI.useMessageReducer<ReducedValue>({
     topics,
     addMessages,
     restore,
   });
 
   return useMemo(() => {
-    // If there's no query data it means we didn't have a match and should return undefined
-    if (!rosPath || (messageAndData?.queriedData.length ?? 0) === 0) {
-      return undefined;
+    if (!rosPath) {
+      return [];
     }
 
-    return messageAndData;
-  }, [messageAndData, rosPath]);
+    return matchedMessages;
+  }, [matchedMessages, rosPath]);
 }

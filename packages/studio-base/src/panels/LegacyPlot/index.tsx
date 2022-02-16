@@ -135,9 +135,8 @@ function TwoDimensionalPlot(props: Props) {
   const [hasVerticalExclusiveZoom, setHasVerticalExclusiveZoom] = React.useState<boolean>(false);
   const [hasBothAxesZoom, setHasBothAxesZoom] = React.useState<boolean>(false);
 
-  const message = useLatestMessageDataItem(path.value)?.queriedData[0]?.value as
-    | PlotMessage
-    | undefined;
+  const matchedMessages = useLatestMessageDataItem(path.value);
+  const message = matchedMessages[0]?.queriedData[0]?.value as PlotMessage | undefined;
 
   const {
     title,

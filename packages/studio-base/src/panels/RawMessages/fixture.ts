@@ -452,6 +452,25 @@ export const multipleMessagesFilter = {
   ),
   topics: [{ name: "/foo", datatype: "custom_message" }],
   frame: {
-    "/foo": [],
+    "/foo": [
+      {
+        topic: "/foo",
+        receiveTime: { sec: 123, nsec: 1 },
+        message: { type: 2, status: "WAITING" },
+        sizeInBytes: 0,
+      },
+      {
+        topic: "/foo",
+        receiveTime: { sec: 123, nsec: 2 },
+        message: { type: 1, status: "FAIL" },
+        sizeInBytes: 0,
+      },
+      {
+        topic: "/foo",
+        receiveTime: { sec: 123, nsec: 3 },
+        message: { type: 2, status: "SUCCESS" },
+        sizeInBytes: 0,
+      },
+    ],
   },
 };
