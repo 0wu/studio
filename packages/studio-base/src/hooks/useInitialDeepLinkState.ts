@@ -14,6 +14,10 @@ import { useCurrentUser } from "@foxglove/studio-base/context/CurrentUserContext
 import { usePlayerSelection } from "@foxglove/studio-base/context/PlayerSelectionContext";
 import { PlayerPresence } from "@foxglove/studio-base/players/types";
 import { parseAppURLState } from "@foxglove/studio-base/util/appURLState";
+import { useToasts } from "react-toast-notifications";
+import { PanelsState } from "@foxglove/studio-base/context/CurrentLayoutContext/actions";
+import { useLayoutManager } from "@foxglove/studio-base/context/LayoutManagerContext";
+import useCallbackWithToast from "@foxglove/studio-base/hooks/useCallbackWithToast";
 
 const selectPlayerPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
@@ -28,6 +32,8 @@ export function useInitialDeepLinkState(deepLinks: readonly string[]): {
 } {
   const { selectSource } = usePlayerSelection();
   const { setSelectedLayoutId } = useCurrentLayoutActions();
+  const layoutManager = useLayoutManager();
+  const { addToast } = useToasts();
 
   const seekPlayback = useMessagePipeline(selectSeek);
   const playerPresence = useMessagePipeline(selectPlayerPresence);
@@ -46,6 +52,49 @@ export function useInitialDeepLinkState(deepLinks: readonly string[]): {
   const [unappliedUrlState, setUnappliedUrlState] = useState(
     targetUrlState ? { ...targetUrlState } : undefined,
   );
+
+  const loadLayoutFromURL = useCallbackWithToast(async (layoutURL: URL) => {
+    const url = new URL(layoutURL);
+
+    const name = url.pathname.replace(/.*\//, '')
+    log.debug(`Trying to load layout ${name} from ${url}`);
+    let res;
+    try {
+      res = await fetch(url.href);
+    } catch {
+      addToast(`Could not load the layout from ${url}`, { appearance: "error" });
+      return;
+    }
+    const parsedState: unknown = JSON.parse(await res.text());
+
+    if (typeof parsedState !== "object" || !parsedState) {
+      addToast(`${url} does not contain valid layout JSON`, { appearance: "error" });
+      return;
+    }
+
+    const data = parsedState as PanelsState;
+    const layouts = await layoutManager.getLayouts();
+    const existing_layout = layouts.find(m => m.name == name);
+    if (existing_layout)
+    {
+        layoutManager.updateLayout({
+          id: existing_layout.id,
+          data: data,
+        })
+        setSelectedLayoutId(existing_layout.id);  
+    }
+    else
+    {
+      const newLayout = await layoutManager.saveNewLayout({
+        name,
+        data,
+        permission: "CREATOR_WRITE",
+      });
+      setSelectedLayoutId(newLayout.id);  
+    }  
+  
+  }, [layoutManager, setSelectedLayoutId, addToast]);
+
 
   // Load data source from URL.
   useEffect(() => {
@@ -71,6 +120,15 @@ export function useInitialDeepLinkState(deepLinks: readonly string[]): {
 
   // Select layout from URL.
   useEffect(() => {
+    // layoutURL takes higher priority over layoutId
+    if (unappliedUrlState?.layoutURL != undefined) {
+      console.log("applying layoutURL", unappliedUrlState.layoutURL);
+      void loadLayoutFromURL(unappliedUrlState.layoutURL);
+      setUnappliedUrlState((oldState) => ({ ...oldState, layoutURL: undefined, layoutId: undefined }));
+      setSelectedLayoutId(unappliedUrlState.layoutId);
+      return;
+    }
+
     if (!unappliedUrlState?.layoutId) {
       return;
     }
@@ -85,7 +143,7 @@ export function useInitialDeepLinkState(deepLinks: readonly string[]): {
     log.debug(`Initializing layout from url: ${unappliedUrlState.layoutId}`);
     setSelectedLayoutId(unappliedUrlState.layoutId);
     setUnappliedUrlState((oldState) => ({ ...oldState, layoutId: undefined }));
-  }, [currentUserRequired, playerPresence, setSelectedLayoutId, unappliedUrlState?.layoutId]);
+  }, [currentUserRequired, playerPresence, setSelectedLayoutId, unappliedUrlState?.layoutId, unappliedUrlState?.layoutURL]);
 
   // Seek to time in URL.
   useEffect(() => {
